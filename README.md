@@ -22,4 +22,5 @@ A sample output is shown as below:
 
 ##Structure
 **The *Udacity_P1.ipynb* and *write_up.md* files are course requirements for project 1 of the Udacity Course.
+
   

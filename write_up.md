@@ -1,47 +1,26 @@
 # **Finding Lane Lines on the Road** 
-
-## Writeup Template
-
-### You can use this file as a template for your writeup if you want to submit it as a markdown file. But feel free to use some other method and submit a pdf if you prefer.
+## Lixing, Zhang
 
 ---
 
 **Finding Lane Lines on the Road**
 
-The goals / steps of this project are the following:
-* Make a pipeline that finds lane lines on the road
-* Reflect on your work in a written report
-
-
-[//]: # (Image References)
-
-[image1]: ../CarND-LaneLines-P1/examples/grayscale.jpg "Grayscale"
+This markdown file explains all the designing trivials of my project for project 1 of the Udacity course "Self-Driving Car Engineering".
 
 ---
 
-### Reflection
+### 1. Pipeline Designing
 
-### 1. Describe your pipeline. As part of the description, explain how you modified the draw_lines() function.
+**The pipeline consists altogether 4 steps, which I would explain below in detail.**
+#### Step 1: Establish the Canny Edge Detector and Adjust its parameters
+#### Step 2: Select region of interest inside the edge map.
+#### Step 3: Establish the Hough Transmission and Adjust its parameters.
+#### Step 4: Draw the 2 lane lines based on the Hough Edges.
 
-My pipeline consisted of 5 steps. First, I converted the images to grayscale, then I .... 
+### 2. Assessment on the Pipeline
+#### Testing Result
+#### Short-Commings
 
-In order to draw a single line on the left and right lanes, I modified the draw_lines() function by ...
-
-If you'd like to include images to show how the pipeline works, here is how to include an image: 
-
-![alt text][image1]
-
-
-### 2. Identify potential shortcomings with your current pipeline
-
-
-One potential shortcoming would be what would happen when ... 
-
-Another shortcoming could be ...
-
-
-### 3. Suggest possible improvements to your pipeline
-
-A possible improvement would be to ...
-
-Another potential improvement could be to ...
+### 3. Potential Improvements of the Pipeline
+#### 1) Build a GUI tool for parameter adjusting
+#### 2) Take curved lane lines into consideration
