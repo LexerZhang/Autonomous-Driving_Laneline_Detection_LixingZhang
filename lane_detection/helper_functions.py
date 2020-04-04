@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import cv2
+import pygame
+import moviepy.editor as mpe
 import math
 from .parameters import *
 
