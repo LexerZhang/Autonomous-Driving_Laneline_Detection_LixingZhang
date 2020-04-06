@@ -33,6 +33,36 @@ def region_of_interest(img, vertices):
     return masked_image
 
 
+def line_vertices(img_BGR):
+    """
+    Accepts an RGB image array, return a tuple of (lines, vertices) for region selection.
+
+    Input:
+    img_RGB: 3-tunnel image array, with size of Height * Width * Tunnels
+
+    Output:
+    lines: cordinates list of all lines to be drawn, size: 1 * Number_of_Lines * 4
+    vertices: cordinates numpy array of all vertices, size: 1 * Number_of_Vertices * 2
+    """
+    y_max, x_max, _ = img_BGR.shape
+    # Assign cordinates for the 4 corners
+    Point_Lower_Left = (round(0.05 * x_max), y_max - 1)
+    Point_Lower_Right = (round(0.98 * x_max), y_max - 1)
+    Point_Upper_Left = (round(0.45 * x_max), round(0.6 * y_max))
+    Point_Upper_Right = (round(0.55 * x_max), round(0.6 * y_max))
+    Point_list = [Point_Lower_Left, Point_Lower_Right,
+                  Point_Upper_Right, Point_Upper_Left]
+    line = []
+    vertices = []
+    for i in range(len(Point_list)):
+        line.append(Point_list[0] + Point_list[1])
+        vertices.append(Point_list[0])
+        Point_list = Point_list[1:] + Point_list[:1]
+    lines = [line]
+    vertices = np.array([vertices])
+    return (lines, vertices)
+
+
 def draw_lines(img, lines, color=[0, 255, 0], thickness=6):
     """
     This function draws `lines` with `color` and `thickness`.
@@ -41,6 +71,30 @@ def draw_lines(img, lines, color=[0, 255, 0], thickness=6):
     for line in lines:
         for x1, y1, x2, y2 in line:
             cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+
+
+def sobel_mag_thresh(img, sobel_kernel=3, mag_thresh=(0, 255), dir_thresh=(0,np.pi/2)):
+    """Use Sobel kernels to calculate the magnitude&direction of derivatives of an image.
+
+    :input: img: image object RGB/GRAY
+    :input: mag_thresh: tuple of magnitude thresholds
+    :input: dir_thresh: tuple of direction thresholds
+    :input: sobel_kernel: size of the sobel kernel
+
+    :output: (mag_bin, dir_bin): magnitude and direction binary image of image derivatives.
+    """
+    if len(img.shape) == 3:
+        img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    elif len(img.shape) == 2:
+        img_gray = cv2.copy(img)
+    dx_img_sobel = cv2.Sobel(img_gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
+    dy_img_sobel = cv2.Sobel(img_gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
+    d_img_mag = np.sqrt(np.square(dx_img_sobel) + np.square(dy_img_sobel))
+    d_img_dir = np.arctan2(np.absolute(dy_img_sobel), np.absolute(dx_img_sobel))
+    d_img_mag_scaled = np.uint8(255 * d_img_mag / d_img_mag.max())
+    d_img_mag_bin = (d_img_mag_scaled > mag_thresh[0]) * (d_img_mag_scaled < mag_thresh[1])
+    d_img_dir_bin = (d_img_dir > dir_thresh[0]) * (d_img_dir < dir_thresh[1])
+    return d_img_mag_bin,d_img_dir_bin
 
 
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
@@ -137,33 +191,3 @@ def image_show(Img, name='image'):
     cv2.imshow(name, Img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-
-
-def line_vertices(img_BGR):
-    """
-    Accepts an RGB image array, return a tuple of (lines, vertices) for region selection.
-
-    Input:
-    img_RGB: 3-tunnel image array, with size of Height * Width * Tunnels
-
-    Output:
-    lines: cordinates list of all lines to be drawn, size: 1 * Number_of_Lines * 4
-    vertices: cordinates numpy array of all vertices, size: 1 * Number_of_Vertices * 2
-    """
-    y_max, x_max, _ = img_BGR.shape
-    # Assign cordinates for the 4 corners
-    Point_Lower_Left = (round(0.05 * x_max), y_max - 1)
-    Point_Lower_Right = (round(0.98 * x_max), y_max - 1)
-    Point_Upper_Left = (round(0.45 * x_max), round(0.6 * y_max))
-    Point_Upper_Right = (round(0.55 * x_max), round(0.6 * y_max))
-    Point_list = [Point_Lower_Left, Point_Lower_Right,
-                  Point_Upper_Right, Point_Upper_Left]
-    line = []
-    vertices = []
-    for i in range(len(Point_list)):
-        line.append(Point_list[0] + Point_list[1])
-        vertices.append(Point_list[0])
-        Point_list = Point_list[1:] + Point_list[:1]
-    lines = [line]
-    vertices = np.array([vertices])
-    return (lines, vertices)
