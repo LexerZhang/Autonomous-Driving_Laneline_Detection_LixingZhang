@@ -63,16 +63,6 @@ def line_vertices(img_BGR):
     return (lines, vertices)
 
 
-def draw_lines(img, lines, color=[0, 255, 0], thickness=6):
-    """
-    This function draws `lines` with `color` and `thickness`.
-    Lines are drawn on the image inplace (mutates the image).
-    """
-    for line in lines:
-        for x1, y1, x2, y2 in line:
-            cv2.line(img, (x1, y1), (x2, y2), color, thickness)
-
-
 def sobel_mag_thresh(img, sobel_kernel=3, mag_thresh=(0, 255), dir_thresh=(0,np.pi/2)):
     """Use Sobel kernels to calculate the magnitude&direction of derivatives of an image.
 
@@ -81,7 +71,7 @@ def sobel_mag_thresh(img, sobel_kernel=3, mag_thresh=(0, 255), dir_thresh=(0,np.
     :input: dir_thresh: tuple of direction thresholds
     :input: sobel_kernel: size of the sobel kernel
 
-    :output: (mag_bin, dir_bin): magnitude and direction binary image of image derivatives.
+    :output: output_img: pixels where the sobel magnitude and direction both fall in their thresholds.
     """
     if len(img.shape) == 3:
         img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
@@ -92,9 +82,9 @@ def sobel_mag_thresh(img, sobel_kernel=3, mag_thresh=(0, 255), dir_thresh=(0,np.
     d_img_mag = np.sqrt(np.square(dx_img_sobel) + np.square(dy_img_sobel))
     d_img_dir = np.arctan2(np.absolute(dy_img_sobel), np.absolute(dx_img_sobel))
     d_img_mag_scaled = np.uint8(255 * d_img_mag / d_img_mag.max())
-    d_img_mag_bin = (d_img_mag_scaled > mag_thresh[0]) * (d_img_mag_scaled < mag_thresh[1])
-    d_img_dir_bin = (d_img_dir > dir_thresh[0]) * (d_img_dir < dir_thresh[1])
-    return d_img_mag_bin,d_img_dir_bin
+    d_img_mag_bin = (d_img_mag_scaled > mag_thresh[0]) & (d_img_mag_scaled < mag_thresh[1])
+    d_img_dir_bin = (d_img_dir > dir_thresh[0]) & (d_img_dir < dir_thresh[1])
+    return np.uint8(d_img_mag_bin&d_img_dir_bin)*255
 
 
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
@@ -170,24 +160,3 @@ def hough2lane_lines(hough_line_list, img):
 
     return np.array([line_l, line_r])
 
-
-def weighted_img(img, initial_img, α=0.8, β=1., γ=0.):
-    """
-    `img` is the output of the hough_lines(), An image with lines drawn on it.
-    Should be a blank image (all black) with lines drawn on it.
-
-    `initial_img` should be the image before any processing.
-
-    The result image is computed as follows:
-
-    initial_img * α + img * β + γ
-    NOTE: initial_img and img must be the same shape!
-    """
-    return cv2.addWeighted(initial_img, α, img, β, γ)
-
-
-def image_show(Img, name='image'):
-    """Show an image until any key is pushed."""
-    cv2.imshow(name, Img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
