@@ -7,7 +7,6 @@ Lane Detection Package
 
 """
 
-from ..helper import *
-from .helper import *
+from .image_processing import *
 from .lanes_detector import *
 # __all__=['image_show', 'image_lane_detector', 'video_processing_pipeline']

@@ -1,15 +1,99 @@
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-import numpy as np
 import cv2
-import pygame
-import moviepy.editor as mpe
-import math
 from .parameters import *
+import cv2
+
+from .parameters import *
+
+
+class image_feature:
+    """
+    The class takes in an image matrix and can do multiple openCV operations on the image.
+    """
+    def __init__(self, img):
+        """
+        The initialization takes in an image matrix.
+        For 2-dim images, format must be GRAY;
+        for 3-dim images, format must be BGR.
+
+        :param img: 2-dim or 3-dim image matrix
+        """
+
+    def channel_selection(self, label):
+        """TODO: Get the specified channel image."""
+
+    def binary_threshold(self, thresholds):
+        """TODO: Create a binary image, in which 0 refers to the region within the thresholds. """
+
+    def gaussian_blur(self, sigma, k_size=3):
+        """TODO: Use a Gaussian Kernel to blur the image"""
+
+    def sobel_convolute(self, method, k_size=3):
+        """TODO: Use a Sobel kernel to calculate the derivative of the image."""
+
+    def __and__(self, other):
+        """TODO: Return the bitwise-and result of 2 image matrices"""
+
+    def __or__(self, other):
+        """TODO: Return the bitwise-or result of 2 image matrices"""
+
+    def __xor__(self, other):
+        """TODO: Return the bitwise-xor result of 2 images matrices"""
+
+    def __add__(self, other):
+        """TODO: Combine the 2 image features by setting them to 2 color channels."""
+
+
+class feature_collector:
+    """
+    Collects a list of features extracted from a single image.
+    Use them for showing, combination, or simply acts as a pipeline.
+    :self.attribute img: the BGR or GRAY image matrix
+    :self.attribute feature_dict: list of image_feature instance
+    :self.attribute color_model: the color model of image
+    """
+
+    def __init__(self, img, color_model='BGR'):
+        """
+        The initialization takes in an image matrix.
+        Acceptable formats including:
+            GRAY scale
+            all validate color formats supported by openCV
+        Images would be in default stored as uint8 format in BGR or GRAY.
+        If the format is not BGR for a 3-dim image, a [format] must be assigned.
+
+        :param img: 2-dim or 3-dim image matrix
+        :param color_model: labels among: BAYER_BG, HLS, HSV, LAB, RGB, BGR, GRAY...
+        """
+        self.img = img
+        self.feature_dict = dict(origin=img.copy())
+        self.normalize()
+        if len(img.shape) == 2:
+            self.color_model = 'GRAY'
+        elif color_model != 'BGR':
+            l_valid_color_format = [key for key in cv2.__dict__.keys()
+                                    if key.startswith('COLOR')
+                                    and key.endswith('2BGR')
+                                    and len(key.split('_')) == 2]
+            if color_model in l_valid_color_format:
+                cvt_method = "cv2.COLOR_"+color_model+"2BGR"
+                self.img = cv2.cvtColor(self.img, eval(cvt_method))
+            else:
+                print('Unknown color model, please manually transfer to BGR.')
+        self.color_model = 'BGR'
+
+    def normalize(self):
+        """TODO: Normalize the image."""
+
+    def add_feature(self, key):
+        """TODO: Add a new image_feature instance to the self.feature_dict by the key."""
+
+    def __call__(self, method='and', **kwargs):
+        """TODO: Combine all features in the self.feature_dict by the method."""
+
 
 def region_of_interest(img, vertices):
     """
-    Applies an image mask.
+    Creates an image mask.
 
     Only keeps the region of the image defined by the polygon
     formed from `vertices`. The rest of the image is set to black.
