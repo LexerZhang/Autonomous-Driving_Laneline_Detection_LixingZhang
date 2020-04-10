@@ -1,9 +1,5 @@
-import os
-
 from moviepy.editor import VideoFileClip
-
-from .image_processing import *
-from ..helper import *
+from cam_image_process.image_functions.image_process_pipeline import *
 
 
 def image_lane_detector(I_BGR, preview=False, save=False):
@@ -17,7 +13,7 @@ def image_lane_detector(I_BGR, preview=False, save=False):
     Edge = cv2.Canny(I_Gray, canny_trs_low, canny_trs_high,
                      apertureSize=gaussian_apertureSize, L2gradient=True)
     Edge = region_of_interest(Edge, vertices)
-    draw_lines(I_BGR, lines, [34, 126, 230], 3)
+    helper.draw_lines(I_BGR, lines, [34, 126, 230], 3)
     hough_lines_list = hough_lines(Edge, rho, theta, threshold, min_line_length, max_line_gap)
     lane_lines_list = hough2lane_lines(hough_lines_list, I_BGR)
     if preview:
@@ -36,10 +32,10 @@ def marked_image_output(img, lane_lines_list=None, preview=True, output_dir='./'
     if lane_lines_list is None:
         lane_lines_list = image_lane_detector(img)
     line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
-    draw_lines(line_img, lane_lines_list)
-    result_img = weighted_img(line_img, img)
+    helper.draw_lines(line_img, lane_lines_list)
+    result_img = helper.weighted_img(line_img, img)
     if preview:
-        image_show(result_img)
+        helper.image_show(result_img)
     if save:
         cv2.imwrite(output_dir + "result.jpg", result_img)
     return result_img
@@ -59,6 +55,6 @@ def marked_video_output(video_path, output_dir = "./"):
 
 
 if __name__ == "__main__":
-    for f_name in os.listdir("test_images/"):
-        img = cv2.imread("./output/" + f_name)
-        image_lane_detector(cv2.imread(f_name))
+    img1 = cv2.imread('test_images/solidWhiteCurve.jpg')
+    f_l = FeatureCollector(img1)
+    f_l.image_show()

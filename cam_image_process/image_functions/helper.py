@@ -1,3 +1,4 @@
+"""Provide some general image_functions for image processing."""
 import cv2
 import numpy as np
 
@@ -26,15 +27,14 @@ def weighted_img(img, initial_img, alpha=0.8, beta=1., gamma=0.):
 
 def draw_lines(img, lines, color=(0, 255, 0), thickness=6):
     """
-    This function draws `lines` with `color` and `thickness`.
-    Lines are drawn on the image inplace (mutates the image).
+    TODO:This function draws `lines` with `color` and `thickness`, creating a blank image with lines drawn onto.
     """
     for line in lines:
         for x1, y1, x2, y2 in line:
             cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
 
-def image_scale(img, abs=True):
+def image_normalization(img, abs=True):
     """
     Scale an image to a uint8 array for representation.
     :param img: single or multi-channel image
@@ -42,7 +42,7 @@ def image_scale(img, abs=True):
     """
 
     if abs:
-        img = np.abs(img)
+        img = np.abs(np.int16(img))
     val_max = img.max()
     val_min = img.min()
     return np.uint8((img - val_min) * 255 / (val_max - val_min))
