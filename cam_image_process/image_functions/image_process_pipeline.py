@@ -18,12 +18,9 @@ class Canvas2:
         """
         self.canvas = np.zeros_like(img)
 
-    def calibration(self, camMtx, distCoe):
-        """
-        TODO: undistort the image using the provided parameters.
-        :param camMtx: the camera Matrix
-        :param distCoe: the distortion coefficient
-        """
+    def show_layer(self, key=False):
+        if key:
+            helper.image_show(self.canvas)
 
     def __and__(self, other):
         """Return the bitwise-and result of 2 image matrices"""
@@ -77,17 +74,21 @@ class ImgFeature2(Canvas2):
         """
         Canvas2.__init__(self, img)
         self.img = img
+        self.canvas = img.copy()
 
-    def binary_threshold(self, thresholds=(0,255)):
+    def binary_threshold(self, thresholds=(0, 255), show_key=False):
         """Create a binary image, in which 0 refers to the region within the thresholds. """
         self.canvas = (self.canvas>thresholds[0])&(self.canvas<thresholds[1])
+        self.show_layer(show_key)
         return self
 
     def gaussian_blur(self, sigma, k_size=3):
         """TODO: Use a Gaussian Kernel to blur the image"""
 
+
     def sobel_convolute(self, method, k_size=3):
         """TODO: Use a Sobel kernel to calculate the derivative of the image."""
+
 
 
 class ImgFeature3(Canvas3, ImgFeature2):
@@ -97,19 +98,20 @@ class ImgFeature3(Canvas3, ImgFeature2):
     :self.attribute img: the feature image(single channel)
     """
 
-    def channel_selection(self, label):
+    def channel_selection(self, label, show_key=False):
         """
         Get the specified channel image.
         :param label: Supported labels:
                       ('R', 'G', 'B', 'H', 'L', 'S')
         """
-
         if label in 'BGR':
             self.canvas = self.img[:,:,'BGR'.index(label)]
         elif label in 'HLS':
             self.canvas = cv2.cvtColor(self.img, cv2.COLOR_BGR2HLS)[:,:,'HLS'.index(label)]
         else:
             print("Sorry but this channel is not supported, return R channel instead.")
+        if show_key:
+            self.show_layer(show_key)
         return self
 
     def gaussian_blur(self, sigma, k_size=3):
@@ -123,7 +125,9 @@ class ImgMask2(Canvas2):
     """
 
     def __init__(self, img):
-        """TODO: inherits the canvas.__init__, instead generate a white image."""
+        """inherits the canvas.__init__, instead generate a white image."""
+        Canvas2.__init__(self, img)
+        self.img = img
 
     def geometrical_mask(self, vertices):
         """
@@ -131,12 +135,17 @@ class ImgMask2(Canvas2):
         :param vertices: numpy matrix of vertices, size: num_vertices x num_edges x 2
         """
 
-    def straight_lines(self, vertices, color=255, thickness=6):
-        """TODO: Create a mask with lines drawn with the parameters provided."""
+    def straight_lines(self, vertices, color=(0, 0, 255), thickness=6, show_key=False):
+        """Create a mask with lines drawn with the parameters provided."""
+        self.canvas = helper.draw_lines(self.canvas, vertices,color,thickness)
+        if show_key:
+            self.show_layer(show_key)
 
 
 class ImgMask3(Canvas3, ImgMask2):
     """TODO: image mask in 3 channels"""
+    def __init__(self, img):
+        ImgMask2.__init__(self, img)
 
 
 class FeatureCollector:
@@ -150,7 +159,7 @@ class FeatureCollector:
     :self.attribute dist_coef: distortion coefficients for calibration
     """
 
-    def __init__(self, img, color_model='BGR'):
+    def __init__(self, img, color_model='BGR', calibrators=(0,0,0,0)):
         """
         The initialization takes in an image matrix.
         Acceptable formats including:
@@ -161,10 +170,15 @@ class FeatureCollector:
 
         :param img: 2-dim or 3-dim image matrix
         :param color_model: labels among: BAYER_BG, HLS, HSV, LAB, RGB, BGR, GRAY...
+        :param calibrators: calibration parameters list following the order(number of
+            chessboard images fed, Camera Matrix, Distortion Coefficient, Warp Matrix)
         """
 
         self.img = helper.image_normalization(img)
+        self.img_processed = self.img.copy()
         self.layers_dict = {}
+        self.calibrators = {"number_of_img":calibrators[0], "CamMtx":calibrators[1],
+                            "DistCoe":calibrators[2], "WarpMtx":calibrators[3]}
         if len(self.img.shape) == 2:
             self.color_model = 'GRAY'
         elif color_model != 'BGR':
@@ -197,14 +211,63 @@ class FeatureCollector:
                 else:
                     self.layers_dict[key] = ImgFeature3(self.img)
 
-    def get_chessboard_calibrators(self, chessboard_img, ):
+    def get_chessboard_calibrators(self, chessboard_img, num_x,num_y=(2,2)):
         """
-        TODO: get calibrators using a chessboard image.
-        :param chessboard_img:
+        Get calibrators using a chessboard image and the specified number of corners.
+        :param chessboard_img: A chess board image
+        :param corners_number: The number of corners on chessboard in x and y directions
         """
+        obj_points = []
+        img_points = []
+        objp = np.zeros((num_x*num_y,3),np.float32)
+        objp[:,:2] = np.mgrid[0:num_x, 0:num_y].T.reshape(-1,2)
+        chessboard_img_gray = cv2.cvtColor(chessboard_img, cv2.COLOR_BGR2GRAY)
+        ret, corners = cv2.findChessboardCorners(chessboard_img_gray, (num_x, num_y))
+        if ret:
+            obj_points.append(objp)
+            img_points.append(corners)
+            ret, mtx, dist, _, _ = cv2.calibrateCamera(obj_points,img_points,
+                                                       chessboard_img_gray.shape[::-1],None,None)
+            self.calibrators["number_of_img"] += 1
+            n = self.calibrators["number_of_img"]
+            self.calibrators["CamMtx"] = (self.calibrators["CamMtx"] * (n-1)+mtx)/n
+            self.calibrators["DistCoe"] = (self.calibrators["DistCoe"] * (n-1)+dist)/n
+            chessboard_undistorted_gray = cv2.undistort(chessboard_img_gray, self.calibrators["CamMtx"],
+                                                        self.calibrators["DistCoe"])
+            _, points = cv2.findChessboardCorners(chessboard_undistorted_gray, (num_x, num_y))
+            src_left_up = points[0][0]
+            src_right_up = points[num_x-1][0]
+            src_left_low = points[num_x*(num_y-1)][0]
+            src_right_low = points[num_x*num_y-1][0]
+            dst_left_up = [100, 100]
+            dst_left_low = [100, chessboard_undistorted_gray.shape[0] - 100]
+            dst_right_up = [chessboard_undistorted_gray.shape[1] - 100, 100]
+            dst_right_low = [chessboard_undistorted_gray.shape[1] - 100, chessboard_undistorted_gray.shape[0] - 100]
+            src = np.array([src_left_up, src_right_up, src_left_low, src_right_low], dtype=np.float32)
+            dst = np.array([dst_left_up, dst_right_up, dst_left_low, dst_right_low], dtype=np.float32)
+            self.calibrators["WarpMtx"] = cv2.getPerspectiveTransform(src, dst)
+        else:
+            print("Unable to detect corners, please try again!")
+
+    def undistort(self):
+        """
+        Undistort the image using the provided parameters.
+        :param camMtx: the camera Matrix
+        :param distCoe: the distortion coefficient
+        """
+        self.img = cv2.undistort(self.img, self.calibrators["CamMtx"], self.calibrators["DistCoe"])
+        return self
+
+    def warp(self):
+        """
+        Warp the image using a perspective transformation matrix.
+        :param M: the warp Matrix
+        """
+        self.img = cv2.warpPerspective(self.img, self.calibrators["WarpMtx"], self.img.shape[1::-1])
+        return self
 
     def image_show(self):
-        helper.image_show(self.img)
+        helper.image_show(self.img_processed)
 
     def __call__(self, key1, key2, method='and'):
         """
@@ -218,10 +281,10 @@ class FeatureCollector:
         except:
             print("Invalid keys!")
             return
-        if method == 'and': return layer1&layer2
-        elif method == 'or': return layer1|layer2
-        elif method == 'xor': return layer1^layer2
-        elif method == 'add': return layer1+layer2
+        if method == 'and': self.img_processed = layer1&layer2
+        elif method == 'or': self.img_processed = layer1|layer2
+        elif method == 'xor': self.img_processed = layer1^layer2
+        elif method == 'add': self.img_processed = layer1+layer2
         else:
             print("Doesn't support such method, sorry.")
             return

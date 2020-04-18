@@ -27,11 +27,14 @@ def weighted_img(img, initial_img, alpha=0.8, beta=1., gamma=0.):
 
 def draw_lines(img, lines, color=(0, 255, 0), thickness=6):
     """
-    TODO:This function draws `lines` with `color` and `thickness`, creating a blank image with lines drawn onto.
+    This function draws `lines` with `color` and `thickness`,
+    returning a blank image with lines drawn onto.
     """
+    img_blank = np.zeros_like(img)
     for line in lines:
         for x1, y1, x2, y2 in line:
-            cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+            cv2.line(img_blank, (x1, y1), (x2, y2), color, thickness)
+    return img_blank
 
 
 def image_normalization(img, abs=True):
