@@ -1,5 +1,6 @@
 from moviepy.editor import VideoFileClip
 from cam_image_process.image_functions.image_process_pipeline import *
+from cam_image_process.image_functions.helper import *
 
 
 def image_lane_detector(I_BGR, preview=False, save=False):

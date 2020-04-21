@@ -24,7 +24,8 @@ class Canvas2:
 
     def __and__(self, other):
         """Return the bitwise-and result of 2 image matrices"""
-        return helper.image_normalization(np.logical_and(self.canvas, other.canvas))
+        self.canvas = helper.image_normalization(np.logical_and(self.canvas, other.canvas))
+        return self.canvas
 
     def __or__(self, other):
         """Return the bitwise-or result of 2 image matrices"""
@@ -82,13 +83,31 @@ class ImgFeature2(Canvas2):
         self.show_layer(show_key)
         return self
 
-    def gaussian_blur(self, sigma, k_size=3):
-        """TODO: Use a Gaussian Kernel to blur the image"""
+    def gaussian_blur(self, sigma, k_size=(3,3), show_key=False):
+        """Use a Gaussian Kernel to blur the image"""
+        self.canvas = cv2.GaussianBlur(self.canvas, k_size, sigma)
+        self.show_layer(show_key)
+        return self
 
 
     def sobel_convolute(self, method, k_size=3):
-        """TODO: Use a Sobel kernel to calculate the derivative of the image."""
-
+        """
+        Use a Sobel kernel to calculate the derivative of the image.
+        """
+        img_gray = self.canvas
+        if method == 'x':
+            self.canvas = np.absolute(cv2.Sobel(img_gray, cv2.CV_64F, 1, 0, ksize=k_size))
+        elif method == 'y':
+            self.canvas = np.absolute(cv2.Sobel(img_gray, cv2.CV_64F, 0, 1, ksize=k_size))
+        elif method == 'dir':
+            dx_img_sobel = np.absolute(cv2.Sobel(img_gray, cv2.CV_64F, 1, 0, ksize=k_size))
+            dy_img_sobel = np.absolute(cv2.Sobel(img_gray, cv2.CV_64F, 0, 1, ksize=k_size))
+            self.canvas = np.arctan2(np.absolute(dy_img_sobel), np.absolute(dx_img_sobel))
+        else:
+            dx_img_sobel = np.absolute(cv2.Sobel(img_gray, cv2.CV_64F, 1, 0, ksize=k_size))
+            dy_img_sobel = np.absolute(cv2.Sobel(img_gray, cv2.CV_64F, 0, 1, ksize=k_size))
+            self.canvas = np.sqrt(np.square(dx_img_sobel) + np.square(dy_img_sobel))
+        return self
 
 
 class ImgFeature3(Canvas3, ImgFeature2):
@@ -104,18 +123,23 @@ class ImgFeature3(Canvas3, ImgFeature2):
         :param label: Supported labels:
                       ('R', 'G', 'B', 'H', 'L', 'S')
         """
-        if label in 'BGR':
+        if label.upper() == 'GRAY':
+            self.canvas = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
+        elif label in 'BGR':
             self.canvas = self.img[:,:,'BGR'.index(label)]
         elif label in 'HLS':
             self.canvas = cv2.cvtColor(self.img, cv2.COLOR_BGR2HLS)[:,:,'HLS'.index(label)]
         else:
-            print("Sorry but this channel is not supported, return R channel instead.")
-        if show_key:
-            self.show_layer(show_key)
+            print("Sorry but this channel is not supported, return GRAY Scale instead.")
+            self.canvas = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
+        self.show_layer(show_key)
         return self
 
-    def gaussian_blur(self, sigma, k_size=3):
-        """TODO: Use a Gaussian Kernel to blur the image"""
+    def sobel_convolute(self, method, k_size=3):
+        """In case the canvas is still 3-channeled, convert to GRAY_Scale first."""
+        if self.canvas.shape == 3:
+            self.channel_selection('GRAY')
+        ImgFeature2.sobel_convolute(self, method, k_size)
 
 
 class ImgMask2(Canvas2):
@@ -129,11 +153,19 @@ class ImgMask2(Canvas2):
         Canvas2.__init__(self, img)
         self.img = img
 
-    def geometrical_mask(self, vertices):
+    def geometrical_mask(self, vertices, show_key=False):
         """
-        TODO: mask out the region outside of the vertices.
+        mask out the region outside of the vertices.
         :param vertices: numpy matrix of vertices, size: num_vertices x num_edges x 2
         """
+        mask = np.zeros_like(self.img) # defining a blank mask to start with
+        ignore_mask_color = 255
+        # filling pixels inside the polygon defined by "vertices" with the fill color
+        cv2.fillPoly(mask, vertices, ignore_mask_color)
+        self.canvas = mask
+        if show_key:
+            self.show_layer(show_key)
+        return self
 
     def straight_lines(self, vertices, color=(0, 0, 255), thickness=6, show_key=False):
         """Create a mask with lines drawn with the parameters provided."""
@@ -146,6 +178,23 @@ class ImgMask3(Canvas3, ImgMask2):
     """TODO: image mask in 3 channels"""
     def __init__(self, img):
         ImgMask2.__init__(self, img)
+
+    def geometrical_mask(self, vertices, show_key=False):
+        """
+        mask out the region outside of the vertices.
+        :param vertices: numpy matrix of vertices, size: num_vertices x num_edges x 2
+        """
+        mask = np.zeros_like(self.img) # defining a blank mask to start with
+        if len(self.img.shape) > 2:
+            channel_count = self.img.shape[2]  # i.e. 3 or 4 depending on your image
+            ignore_mask_color = (255,) * channel_count
+        else:
+            ignore_mask_color = 255
+        # filling pixels inside the polygon defined by "vertices" with the fill color
+        cv2.fillPoly(mask, vertices, ignore_mask_color)
+        self.canvas = mask
+        self.show_layer(show_key)
+        return self
 
 
 class FeatureCollector:
@@ -290,32 +339,6 @@ class FeatureCollector:
             return
 
 
-def region_of_interest(img, vertices):
-    """
-    Creates an image mask.
-
-    Only keeps the region of the image defined by the polygon
-    formed from `vertices`. The rest of the image is set to black.
-    `vertices` should be a numpy array of integer points.
-    """
-    # defining a blank mask to start with
-    mask = np.zeros_like(img)
-
-    # defining a 3 channel or 1 channel color to fill the mask with depending on the input image
-    if len(img.shape) > 2:
-        channel_count = img.shape[2]  # i.e. 3 or 4 depending on your image
-        ignore_mask_color = (255,) * channel_count
-    else:
-        ignore_mask_color = 255
-
-    # filling pixels inside the polygon defined by "vertices" with the fill color
-    cv2.fillPoly(mask, vertices, ignore_mask_color)
-
-    # returning the image only where mask pixels are nonzero
-    masked_image = cv2.bitwise_and(img, mask)
-    return masked_image
-
-
 def line_vertices(img_BGR):
     """
     Accepts an RGB image array, return a tuple of (lines, vertices) for region selection.
@@ -344,30 +367,6 @@ def line_vertices(img_BGR):
     lines = [line]
     vertices = np.array([vertices])
     return (lines, vertices)
-
-
-def sobel_mag_thresh(img, sobel_kernel=3, mag_thresh=(0, 255), dir_thresh=(0, np.pi / 2)):
-    """Use Sobel kernels to calculate the magnitude&direction of derivatives of an image.
-
-    :input: img: image object RGB/GRAY
-    :input: mag_thresh: tuple of magnitude thresholds
-    :input: dir_thresh: tuple of direction thresholds
-    :input: sobel_kernel: size of the sobel kernel
-
-    :output: output_img: pixels where the sobel magnitude and direction both fall in their thresholds.
-    """
-    if len(img.shape) == 3:
-        img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    elif len(img.shape) == 2:
-        img_gray = cv2.copy(img)
-    dx_img_sobel = cv2.Sobel(img_gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-    dy_img_sobel = cv2.Sobel(img_gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
-    d_img_mag = np.sqrt(np.square(dx_img_sobel) + np.square(dy_img_sobel))
-    d_img_dir = np.arctan2(np.absolute(dy_img_sobel), np.absolute(dx_img_sobel))
-    d_img_mag_scaled = np.uint8(255 * d_img_mag / d_img_mag.max())
-    d_img_mag_bin = (d_img_mag_scaled > mag_thresh[0]) & (d_img_mag_scaled < mag_thresh[1])
-    d_img_dir_bin = (d_img_dir > dir_thresh[0]) & (d_img_dir < dir_thresh[1])
-    return np.uint8(d_img_mag_bin & d_img_dir_bin) * 255
 
 
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):

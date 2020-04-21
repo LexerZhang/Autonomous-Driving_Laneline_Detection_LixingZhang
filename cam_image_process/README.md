@@ -50,6 +50,8 @@ This project aims in detecting the simplest case of lanemark detection - finding
 
 ![image_sample](../test_images/solidWhiteCurve.jpg)
 
+★★Before pipelining any images, the calibration parameters shall be calculated and stored inside the FeatureCollector.
+
 The basic detecting scheme works in such a pipeline:
 
 1.Extract geometrically the region of interest, in which both lane-lines appear.  

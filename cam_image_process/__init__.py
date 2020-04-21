@@ -11,3 +11,5 @@ Lane Detection Package
 from .lanes_detector import *
 from .image_functions import helper
 # __all__=['image_show', 'image_lane_detector', 'video_processing_pipeline']
+
+# collector = image_functions.image_process_pipeline.FeatureCollector(img)
