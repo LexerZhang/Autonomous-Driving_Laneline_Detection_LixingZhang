@@ -1,0 +1,144 @@
+Index: lane_detection/__init__.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>\"\"\"\r\nLane Detection Package\r\n======================\r\n\r\n.. currentmodule:: Lane Detection\r\n\r\n\r\n\"\"\"\r\n\r\nfrom .image_processing import *\r\nfrom .lanes_detector import *\r\n# __all__=['image_show', 'image_lane_detector', 'video_processing_pipeline']\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- lane_detection/__init__.py	(revision 1e3e8a09ecedb6f1eea758373bbe44aea5aee016)
++++ cam_image_process/__init__.py	(date 1586529335724)
+@@ -7,6 +7,7 @@
+ 
+ """
+ 
+-from .image_processing import *
++#from cam_image_process.image_functions.image_process_pipeline import *
+ from .lanes_detector import *
++from .image_functions import helper
+ # __all__=['image_show', 'image_lane_detector', 'video_processing_pipeline']
+Index: helper.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import cv2\r\nimport numpy as np\r\n\r\n\r\ndef image_show(img, name='image'):\r\n    \"\"\"Show an image until any key is pushed.\"\"\"\r\n    cv2.imshow(name, img)\r\n    cv2.waitKey(0)\r\n    cv2.destroyAllWindows()\r\n\r\n\r\ndef weighted_img(img, initial_img, alpha=0.8, beta=1., gamma=0.):\r\n    \"\"\"\r\n    `img` is the output of the hough_lines(), An image with lines drawn on it.\r\n    Should be a blank image (all black) with lines drawn on it.\r\n\r\n    `initial_img` should be the image before any processing.\r\n\r\n    The result image is computed as follows:\r\n\r\n    initial_img * α + img * β + γ\r\n    NOTE: initial_img and img must be the same shape!\r\n    \"\"\"\r\n    return cv2.addWeighted(initial_img, alpha, img, beta, gamma)\r\n\r\n\r\ndef draw_lines(img, lines, color=(0, 255, 0), thickness=6):\r\n    \"\"\"\r\n    This function draws `lines` with `color` and `thickness`.\r\n    Lines are drawn on the image inplace (mutates the image).\r\n    \"\"\"\r\n    for line in lines:\r\n        for x1, y1, x2, y2 in line:\r\n            cv2.line(img, (x1, y1), (x2, y2), color, thickness)\r\n\r\n\r\ndef image_scale(img, abs=True):\r\n    \"\"\"\r\n    Scale an image to a uint8 array for representation.\r\n    :param img: single or multi-channel image\r\n    :return: the scaled image matrix in format uint8\r\n    \"\"\"\r\n\r\n    if abs:\r\n        img = np.abs(img)\r\n    val_max = img.max()\r\n    val_min = img.min()\r\n    return np.uint8((img - val_min) * 255 / (val_max - val_min))\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- helper.py	(revision 1e3e8a09ecedb6f1eea758373bbe44aea5aee016)
++++ cam_image_process/image_functions/helper.py	(date 1586548365128)
+@@ -1,3 +1,4 @@
++"""Provide some general image_functions for image processing."""
+ import cv2
+ import numpy as np
+ 
+@@ -26,15 +27,14 @@
+ 
+ def draw_lines(img, lines, color=(0, 255, 0), thickness=6):
+     """
+-    This function draws `lines` with `color` and `thickness`.
+-    Lines are drawn on the image inplace (mutates the image).
++    TODO:This function draws `lines` with `color` and `thickness`, creating a blank image with lines drawn onto.
+     """
+     for line in lines:
+         for x1, y1, x2, y2 in line:
+             cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+ 
+ 
+-def image_scale(img, abs=True):
++def image_normalization(img, abs=True):
+     """
+     Scale an image to a uint8 array for representation.
+     :param img: single or multi-channel image
+@@ -42,7 +42,7 @@
+     """
+ 
+     if abs:
+-        img = np.abs(img)
++        img = np.abs(np.int16(img))
+     val_max = img.max()
+     val_min = img.min()
+     return np.uint8((img - val_min) * 255 / (val_max - val_min))
+Index: lane_detection/lanes_detector.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import os\r\n\r\nfrom moviepy.editor import VideoFileClip\r\n\r\nfrom .image_processing import *\r\nfrom ..helper import *\r\n\r\n\r\ndef image_lane_detector(I_BGR, preview=False, save=False):\r\n    \"\"\"\r\n    A Pipeline for lane detection of a single image. Results would be saved.\r\n    :param I_BGR: Original BGR image array object\r\n    :return lane_line_list: BGR image array object with Hough Lines and Vertices drawn onto it.\r\n    \"\"\"\r\n    I_Gray = cv2.cvtColor(I_BGR, cv2.COLOR_RGB2GRAY)\r\n    lines, vertices = line_vertices(I_BGR)\r\n    Edge = cv2.Canny(I_Gray, canny_trs_low, canny_trs_high,\r\n                     apertureSize=gaussian_apertureSize, L2gradient=True)\r\n    Edge = region_of_interest(Edge, vertices)\r\n    draw_lines(I_BGR, lines, [34, 126, 230], 3)\r\n    hough_lines_list = hough_lines(Edge, rho, theta, threshold, min_line_length, max_line_gap)\r\n    lane_lines_list = hough2lane_lines(hough_lines_list, I_BGR)\r\n    if preview:\r\n        marked_image_output(I_BGR, lane_lines_list, save=save)\r\n    return lane_lines_list\r\n\r\n\r\ndef marked_image_output(img, lane_lines_list=None, preview=True, output_dir='./', save=True):\r\n    \"\"\"\r\n    Preview and save the image frame with features calculated.\r\n    :param img: The original RGB image\r\n    :param lane_lines_list:\r\n    :param output_dir:\r\n    :return:\r\n    \"\"\"\r\n    if lane_lines_list is None:\r\n        lane_lines_list = image_lane_detector(img)\r\n    line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)\r\n    draw_lines(line_img, lane_lines_list)\r\n    result_img = weighted_img(line_img, img)\r\n    if preview:\r\n        image_show(result_img)\r\n    if save:\r\n        cv2.imwrite(output_dir + \"result.jpg\", result_img)\r\n    return result_img\r\n\r\n\r\ndef marked_video_output(video_path, output_dir = \"./\"):\r\n    \"\"\"\r\n    A video processing pipeline which processes each frame of the video\r\n    with the image processing pipeline defined.\r\n    :param video_path: the path where the video locates\r\n    :return: None\r\n    \"\"\"\r\n    clip = VideoFileClip(video_path)\r\n    result = clip.fl_image(lambda a: marked_image_output(a, image_lane_detector(a), preview=False, save=False))\r\n    result.preview(fps=12)\r\n    result.write_videofile(output_dir + \"result.mp4\", audio=False)\r\n\r\n\r\nif __name__ == \"__main__\":\r\n    for f_name in os.listdir(\"test_images/\"):\r\n        img = cv2.imread(\"./output/\" + f_name)\r\n        image_lane_detector(cv2.imread(f_name))\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- lane_detection/lanes_detector.py	(revision 1e3e8a09ecedb6f1eea758373bbe44aea5aee016)
++++ cam_image_process/lanes_detector.py	(date 1586529335742)
+@@ -1,9 +1,5 @@
+-import os
+-
+ from moviepy.editor import VideoFileClip
+-
+-from .image_processing import *
+-from ..helper import *
++from cam_image_process.image_functions.image_process_pipeline import *
+ 
+ 
+ def image_lane_detector(I_BGR, preview=False, save=False):
+@@ -17,7 +13,7 @@
+     Edge = cv2.Canny(I_Gray, canny_trs_low, canny_trs_high,
+                      apertureSize=gaussian_apertureSize, L2gradient=True)
+     Edge = region_of_interest(Edge, vertices)
+-    draw_lines(I_BGR, lines, [34, 126, 230], 3)
++    helper.draw_lines(I_BGR, lines, [34, 126, 230], 3)
+     hough_lines_list = hough_lines(Edge, rho, theta, threshold, min_line_length, max_line_gap)
+     lane_lines_list = hough2lane_lines(hough_lines_list, I_BGR)
+     if preview:
+@@ -36,10 +32,10 @@
+     if lane_lines_list is None:
+         lane_lines_list = image_lane_detector(img)
+     line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
+-    draw_lines(line_img, lane_lines_list)
+-    result_img = weighted_img(line_img, img)
++    helper.draw_lines(line_img, lane_lines_list)
++    result_img = helper.weighted_img(line_img, img)
+     if preview:
+-        image_show(result_img)
++        helper.image_show(result_img)
+     if save:
+         cv2.imwrite(output_dir + "result.jpg", result_img)
+     return result_img
+@@ -59,6 +55,6 @@
+ 
+ 
+ if __name__ == "__main__":
+-    for f_name in os.listdir("test_images/"):
+-        img = cv2.imread("./output/" + f_name)
+-        image_lane_detector(cv2.imread(f_name))
++    img1 = cv2.imread('test_images/solidWhiteCurve.jpg')
++    f_l = FeatureCollector(img1)
++    f_l.image_show()
+Index: .idea/other.xml
+===================================================================
+--- .idea/other.xml	(date 1586520986757)
++++ .idea/other.xml	(date 1586520986757)
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<project version="4">
++  <component name="PySciProjectComponent">
++    <option name="PY_SCI_VIEW_SUGGESTED" value="true" />
++  </component>
++</project>
+\ No newline at end of file
+Index: __init__.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import cv2\r\nprint(\"Welcome to my autonomous driving package\\n--Author: Lixing Zhang@TUM,RCI\")\r\nfrom . import lane_detection\r\nfrom .helper import *
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- __init__.py	(revision 1e3e8a09ecedb6f1eea758373bbe44aea5aee016)
++++ __init__.py	(date 1586523159491)
+@@ -1,4 +1,1 @@
+-import cv2
+ print("Welcome to my autonomous driving package\n--Author: Lixing Zhang@TUM,RCI")
+-from . import lane_detection
+-from .helper import *
+\ No newline at end of file
+diff --git lane_detection/parameters.py cam_image_process/parameters.py
+rename from lane_detection/parameters.py
+rename to cam_image_process/parameters.py
+diff --git cam_image_process/image_functions/__init__.py cam_image_process/image_functions/__init__.py
+new file mode 100644
