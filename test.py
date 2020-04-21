@@ -55,8 +55,21 @@ def line_vertices(img_BGR):
 
 
 vertices = line_vertices(img1)
-Mask_Test = ld.ImgMask3(img1)
-Mask_Test.geometrical_mask(vertices,True)
-Layer_Img = ld.ImgFeature3(img1)
-img_mixed = Mask_Test & Layer_Img
-ld.image_show(img_mixed)
+my_collector = ld.FeatureCollector(img1)
+my_collector.add_layer('lane_mask','mask')
+my_collector.add_layer('L_sobel_mag','feature')
+my_collector.add_layer('L_sobel_dir')
+my_collector.layers_dict['lane_mask'].geometrical_mask(vertices)
+
+l_mag = my_collector.layers_dict['L_sobel_mag']
+l_mag.channel_selection('L').sobel_convolute('mag',show_key=True)
+l_mag.binary_threshold((120,255), True)
+
+l_dir = my_collector.layers_dict['L_sobel_dir']
+l_dir.channel_selection('L').sobel_convolute('dir',show_key=True)
+l_dir.binary_threshold((np.pi/4, np.pi/3), True)
+
+my_collector.combine('main','L_sobel_mag','and')
+my_collector.combine('main','L_sobel_dir','and')
+my_collector.combine('main','lane_mask','and')
+my_collector.image_show()

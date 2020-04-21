@@ -16,28 +16,35 @@ class Canvas2:
         set the self.img as a black image of the same size as img.
         :param img: the feature image numpy matrix
         """
-        self.canvas = np.zeros_like(img)
+        self.canvas = 255*np.ones_like(img[:,:,0])
+        #self.img_normalization()
 
     def show_layer(self, key=False):
         if key:
             helper.image_show(self.canvas)
 
+    def img_normalization(self):
+        self.canvas=helper.image_normalization(self.canvas)
+
     def __and__(self, other):
         """Return the bitwise-and result of 2 image matrices"""
-        self.canvas = helper.image_normalization(np.logical_and(self.canvas, other.canvas))
+        self.canvas = helper.image_normalization(cv2.bitwise_and(self.canvas, other.canvas))
         return self.canvas
 
     def __or__(self, other):
         """Return the bitwise-or result of 2 image matrices"""
-        return helper.image_normalization(np.logical_or(self.canvas, other.canvas))
+        self.canvas = helper.image_normalization(cv2.bitwise_or(self.canvas, other.canvas))
+        return self.canvas
 
     def __xor__(self, other):
         """Return the bitwise-xor result of 2 images matrices"""
-        return helper.image_normalization(np.logical_xor(self.canvas, other.canvas))
+        self.canvas = helper.image_normalization(cv2.bitwise_xor(self.canvas, other.canvas))
+        return self.canvas
 
     def __add__(self, other):
         """Combine the 2 image features by setting them to 2 color channels."""
-        return helper.image_normalization(np.stack((self.canvas, other.canvas, np.zeros_like(self.canvas)), axis=2))
+        self.canvas = helper.image_normalization(np.stack((self.canvas, other.canvas, np.zeros_like(self.canvas)), axis=2))
+        return self.canvas
 
 
 class Canvas3(Canvas2):
@@ -79,7 +86,7 @@ class ImgFeature2(Canvas2):
 
     def binary_threshold(self, thresholds=(0, 255), show_key=False):
         """Create a binary image, in which 0 refers to the region within the thresholds. """
-        self.canvas = (self.canvas>thresholds[0])&(self.canvas<thresholds[1])
+        self.canvas = helper.image_normalization((self.canvas>thresholds[0])&(self.canvas<thresholds[1]))
         self.show_layer(show_key)
         return self
 
@@ -90,7 +97,7 @@ class ImgFeature2(Canvas2):
         return self
 
 
-    def sobel_convolute(self, method, k_size=3):
+    def sobel_convolute(self, method, k_size=3, show_key=False):
         """
         Use a Sobel kernel to calculate the derivative of the image.
         """
@@ -107,6 +114,8 @@ class ImgFeature2(Canvas2):
             dx_img_sobel = np.absolute(cv2.Sobel(img_gray, cv2.CV_64F, 1, 0, ksize=k_size))
             dy_img_sobel = np.absolute(cv2.Sobel(img_gray, cv2.CV_64F, 0, 1, ksize=k_size))
             self.canvas = np.sqrt(np.square(dx_img_sobel) + np.square(dy_img_sobel))
+        #self.img_normalization()
+        self.show_layer(show_key)
         return self
 
 
@@ -125,21 +134,22 @@ class ImgFeature3(Canvas3, ImgFeature2):
         """
         if label.upper() == 'GRAY':
             self.canvas = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
-        elif label in 'BGR':
+        elif label.upper() in 'BGR':
             self.canvas = self.img[:,:,'BGR'.index(label)]
-        elif label in 'HLS':
+        elif label.upper() in 'HLS':
             self.canvas = cv2.cvtColor(self.img, cv2.COLOR_BGR2HLS)[:,:,'HLS'.index(label)]
         else:
             print("Sorry but this channel is not supported, return GRAY Scale instead.")
             self.canvas = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
+        self.img_normalization()
         self.show_layer(show_key)
         return self
 
-    def sobel_convolute(self, method, k_size=3):
+    def sobel_convolute(self, method, k_size=3,show_key=False):
         """In case the canvas is still 3-channeled, convert to GRAY_Scale first."""
         if self.canvas.shape == 3:
-            self.channel_selection('GRAY')
-        ImgFeature2.sobel_convolute(self, method, k_size)
+            self.Canvas2GRAY()
+        return ImgFeature2.sobel_convolute(self, method, k_size,show_key)
 
 
 class ImgMask2(Canvas2):
@@ -158,7 +168,7 @@ class ImgMask2(Canvas2):
         mask out the region outside of the vertices.
         :param vertices: numpy matrix of vertices, size: num_vertices x num_edges x 2
         """
-        mask = np.zeros_like(self.img) # defining a blank mask to start with
+        mask = np.zeros_like(self.canvas) # defining a blank mask to start with
         ignore_mask_color = 255
         # filling pixels inside the polygon defined by "vertices" with the fill color
         cv2.fillPoly(mask, vertices, ignore_mask_color)
@@ -226,6 +236,7 @@ class FeatureCollector:
         self.img = helper.image_normalization(img)
         self.img_processed = self.img.copy()
         self.layers_dict = {}
+        self.add_layer('main','mask')
         self.calibrators = {"number_of_img":calibrators[0], "CamMtx":calibrators[1],
                             "DistCoe":calibrators[2], "WarpMtx":calibrators[3]}
         if len(self.img.shape) == 2:
@@ -255,10 +266,7 @@ class FeatureCollector:
                 else:
                     self.layers_dict[key] = ImgFeature3(self.img)
             else:
-                if self.color_model == "GRAY":
-                    self.layers_dict[key] = ImgFeature2(self.img)
-                else:
-                    self.layers_dict[key] = ImgFeature3(self.img)
+                self.layers_dict[key] = ImgMask2(self.img)
 
     def get_chessboard_calibrators(self, chessboard_img, num_x,num_y=(2,2)):
         """
@@ -315,10 +323,11 @@ class FeatureCollector:
         self.img = cv2.warpPerspective(self.img, self.calibrators["WarpMtx"], self.img.shape[1::-1])
         return self
 
-    def image_show(self):
-        helper.image_show(self.img_processed)
+    def image_show(self,show_key=True):
+        if show_key:
+            helper.image_show(self.img_processed)
 
-    def __call__(self, key1, key2, method='and'):
+    def combine(self, key1, key2, method='and'):
         """
         Return the Combination of 2 features in the self.layers_dict according to the method.
         :param key1, key2: The keys of canvases to be combined.
