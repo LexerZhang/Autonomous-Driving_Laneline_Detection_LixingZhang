@@ -45,7 +45,7 @@
     - overloaded methods: __call__
 
 ## Typical Tasks
-### 1. Lane Line Detection
+### 1. Lane Line Detection-Hough Transform
 This project aims in detecting the simplest case of lanemark detection - finding well-painted straight lanelines on both sides of the ego-vehicle.
 
 ![image_sample](../test_images/solidWhiteCurve.jpg)
