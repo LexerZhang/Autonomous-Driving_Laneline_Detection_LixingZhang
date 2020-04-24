@@ -11,23 +11,30 @@ def Hough_image_lane_detector(img_container):
     """
     #img1 = cv2.imread('test_images/solidYellowCurve.jpg') #TODO: Remove later
     #img_container = FeatureCollector(img1) #TODO: Remove later
-    vertices = get_vertices(img_container.img)
+    vertices, edge_lines = get_vertices(img_container.img)
+
     img_container.add_layer("region_mask",'mask')
     img_container.layers_dict["region_mask"].geometrical_mask(vertices)
+
+    img_container.add_layer("edge_lines","mask")
+    img_container.layers_dict["edge_lines"].straight_lines(edge_lines)
+
     S_sobel_mag = ImgFeature3(img_container.img)
-    S_sobel_mag.channel_selection('S').sobel_convolute("mag").binary_threshold((50,200),True)
+    S_sobel_mag.channel_selection('S').sobel_convolute("mag").binary_threshold((50,200))
     img_container.add_layer("S_sobel_mag", layer=S_sobel_mag)
+
     S_sobel_dir = ImgFeature3(img_container.img)
-    S_sobel_dir.channel_selection('S').sobel_convolute("dir").binary_threshold((np.pi*2/9, np.pi/3), True)
+    S_sobel_dir.channel_selection('S').sobel_convolute("dir").binary_threshold((np.pi*2/9, np.pi/3))
     img_container.add_layer("S_sobel_dir", layer=S_sobel_dir)
 
-    img_container.combine("main","S_sobel_mag","and")
-    img_container.combine("main","S_sobel_dir","and")
-    img_container.combine("main", "region_mask","and")
+    img_container.combine("S_sobel_mag","S_sobel_dir","and")
+    img_container.combine("S_sobel_mag", "region_mask","and")
+    img_container.image_show(True)
+    img_container.combine("main","edge_lines", "mix")
+    img_container.image_show(True)
     #helper.draw_lines(I_BGR, lines, [34, 126, 230], 3)
     #hough_lines_list = hough_lines(Edge, rho, theta, threshold, min_line_length, max_line_gap)
     #lane_lines_list = hough2lane_lines(hough_lines_list, I_BGR)
-    img_container.image_show(True)
     return img_container.img_processed
 
 
@@ -87,7 +94,7 @@ def get_vertices(img_BGR):
         Point_list = Point_list[1:] + Point_list[:1]
     lines = [line]
     vertices = np.array([vertices])
-    return vertices
+    return vertices, lines
 
 
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):

@@ -16,8 +16,8 @@ class Canvas2:
         set the self.img as a black image of the same size as img.
         :param img: the feature image numpy matrix
         """
-        self.canvas = 255*np.ones_like(img[:,:,0])
-        #self.img_normalization()
+        self.img = img
+        self.canvas = 255 * np.ones_like(img)
 
     def show_layer(self, key=False):
         if key:
@@ -55,14 +55,14 @@ class Canvas3(Canvas2):
     """
     def Canvas2GRAY(self):
         """Turn the Canvas to gray scale image."""
-        self.canvas = cv2.cvtColor(self.canvas, cv2.COLOR_BGR2GRAY)
+        self.canvas = cv2.cvtColor(self.canvas, cv2.COLOR_BGR2GRAY).cvtColor(self.canvas, cv2.COLOR_GRAY2BGR)
         return self
 
     def __add__(self, other):
         """Combine the 2 image features by setting them to 2 color channels."""
-        if len(self.canvas.shape)==3:self.Canvas2GRAY()
-        if len(self.canvas.shape)==3:other.Canvas2GRAY()
-        return Canvas2.__add__(self, other)
+        self.canvas = helper.image_normalization(np.stack((self.canvas[0], other.canvas[0], np.zeros_like(self.canvas[0])), axis=2))
+        return self.canvas
+
 
 
 class ImgFeature2(Canvas2):
@@ -125,6 +125,12 @@ class ImgFeature3(Canvas3, ImgFeature2):
     to the ImageFeature2 superclass.
     :self.attribute img: the feature image(single channel)
     """
+    def __init__(self, img):
+        ImgFeature2.__init__(self, img)
+
+    def binary_threshold(self, thresholds=((0,0,0), (255,255,255)), show_key=False):
+        """For 3-channel images, thresholds can be tuples."""
+        return ImgFeature2.binary_threshold(self,thresholds,show_key)
 
     def channel_selection(self, label, show_key=False):
         """
@@ -141,15 +147,10 @@ class ImgFeature3(Canvas3, ImgFeature2):
         else:
             print("Sorry but this channel is not supported, return GRAY Scale instead.")
             self.canvas = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
+        self.canvas = cv2.cvtColor(self.canvas, cv2.COLOR_GRAY2BGR)
         self.img_normalization()
         self.show_layer(show_key)
         return self
-
-    def sobel_convolute(self, method, k_size=3,show_key=False):
-        """In case the canvas is still 3-channeled, convert to GRAY_Scale first."""
-        if self.canvas.shape == 3:
-            self.Canvas2GRAY()
-        return ImgFeature2.sobel_convolute(self, method, k_size,show_key)
 
 
 class ImgMask2(Canvas2):
@@ -157,12 +158,6 @@ class ImgMask2(Canvas2):
     Create an binary image mask using different kinds of edge extraction techniques.
     :self.attribute img: an image mask matrix of the same size as the image to be processed.
     """
-
-    def __init__(self, img):
-        """inherits the canvas.__init__, instead generate a white image."""
-        Canvas2.__init__(self, img)
-        self.img = img
-
     def geometrical_mask(self, vertices, show_key=False):
         """
         mask out the region outside of the vertices.
@@ -177,15 +172,16 @@ class ImgMask2(Canvas2):
             self.show_layer(show_key)
         return self
 
-    def straight_lines(self, vertices, color=(0, 0, 255), thickness=6, show_key=False):
+    def straight_lines(self, vertices, color=(255, 255, 255), thickness=6, show_key=False):
         """Create a mask with lines drawn with the parameters provided."""
         self.canvas = helper.draw_lines(self.canvas, vertices,color,thickness)
         if show_key:
             self.show_layer(show_key)
+        return self
 
 
 class ImgMask3(Canvas3, ImgMask2):
-    """TODO: image mask in 3 channels"""
+    """Image mask in 3 channels"""
     def __init__(self, img):
         ImgMask2.__init__(self, img)
 
@@ -206,6 +202,9 @@ class ImgMask3(Canvas3, ImgMask2):
         self.show_layer(show_key)
         return self
 
+    def straight_lines(self, vertices, color_BGR=(0, 0, 255), thickness=6, show_key=False):
+        """Create a mask with lines drawn with the parameters provided."""
+        return ImgMask2.straight_lines(self, vertices, color_BGR, thickness, show_key)
 
 class FeatureCollector:
     """
@@ -236,7 +235,7 @@ class FeatureCollector:
         self.img = helper.image_normalization(img)
         self.img_processed = self.img.copy()
         self.layers_dict = {}
-        self.add_layer('main','mask')
+        # self.add_layer('main_canvas', "mask")
         self.calibrators = {"number_of_img":calibrators[0], "CamMtx":calibrators[1],
                             "DistCoe":calibrators[2], "WarpMtx":calibrators[3]}
         if len(self.img.shape) == 2:
@@ -252,6 +251,7 @@ class FeatureCollector:
             else:
                 print('Unknown color model, please manually transfer to BGR.')
         self.color_model = 'BGR'
+        self.add_layer("main", "feature")
 
     def add_layer(self, key='layer', type='feature', layer = None):
         """Add a new key:ImgFeature/ImgMask instance to the self.layers_dict."""
@@ -266,7 +266,10 @@ class FeatureCollector:
                 else:
                     self.layers_dict[key] = ImgFeature3(self.img)
             else:
-                self.layers_dict[key] = ImgMask2(self.img)
+                if self.color_model == "GRAY":
+                    self.layers_dict[key] = ImgMask2(self.img)
+                else:
+                    self.layers_dict[key] = ImgMask3(self.img)
 
     def get_chessboard_calibrators(self, chessboard_img, num_x,num_y=(2,2)):
         """
@@ -327,7 +330,7 @@ class FeatureCollector:
         if show_key:
             helper.image_show(self.img_processed)
 
-    def combine(self, key1, key2, method='and'):
+    def combine(self, key1, key2, method='and', parameter=(0.5,1,0)):
         """
         Return the Combination of 2 features in the self.layers_dict according to the method.
         :param key1, key2: The keys of canvases to be combined.
@@ -343,6 +346,7 @@ class FeatureCollector:
         elif method == 'or': self.img_processed = layer1|layer2
         elif method == 'xor': self.img_processed = layer1^layer2
         elif method == 'add': self.img_processed = layer1+layer2
+        elif method == 'mix': self.img_processed = helper.weighted_img(layer1.canvas, layer2.canvas, parameter[0], parameter[1], parameter[2])
         else:
             print("Doesn't support such method, sorry.")
             return
