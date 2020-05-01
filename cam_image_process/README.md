@@ -54,12 +54,12 @@ This project aims in detecting the simplest case of lanemark detection - finding
 
 The basic detecting scheme works in such a pipeline:
 
-1.Extract geometrically the region of interest, in which both lane-lines appear.  
-2.Use a **Canny lane detector** to detect all edges in the extracted region.  
-3.Use a **Hough transmitter** to transmitt all edges into single, long straight lines.  
-4.Group all lines into 2 groups, representing 2 lanes on both sides.
+1. Use a **Canny lane detector** to detect all edges in the image.  
+2. Extract geometrically the region of interest, in which both lane-lines appear.  
+3. Use a **Hough transmitter** to transmitt all edges into single, long straight lines.  
+4. Group all lines into 2 groups, representing 2 lanes on both sides.
 
 A sample output is shown as below:
 
-![output_result](../test_images_outputs/example_result.jpg)
-### 2.
+![output_result](../test_images_output/solidWhiteCurve.jpg)
+### 2. Lane Line Detection-Sliding Window
