@@ -242,6 +242,20 @@ class ImgMask2(Canvas2):
         return self
 
 
+    def puttext(self, text, position=(30, 60), size=1.5, color=(255,255,255), thickness=4, show_key=False):
+        """
+        Put some text onto the image.
+        :param text: string, the text string
+        :param position: tuple[2], gives the position of the left-bottom corner
+        :param size: uint, the size of the text
+        :param color: tuple[3], BGR value of the color the text
+        :param thickness: thickness of text lines
+        """
+        cv2.putText(self.canvas, text, position, cv2.FONT_HERSHEY_SIMPLEX, size, color, thickness)
+        if show_key:
+            self.show_layer(show_key)
+        return self
+
 
 class ImgMask3(Canvas3, ImgMask2):
     """Image mask in 3 channels"""
@@ -298,7 +312,7 @@ class FeatureCollector:
     :self.attribute dist_coef: distortion coefficients for calibration
     """
 
-    def __init__(self, img, color_model='BGR', calibrators=(0, 0, 0, 0)):
+    def __init__(self, img, color_model='BGR', calibrators=(0, 0, 0, np.eye(3))):
         """
         The initialization takes in an image matrix.
         Acceptable formats including:
@@ -343,95 +357,115 @@ class FeatureCollector:
         self.img_processed = self.img.copy()
         self.layers_dict = {}
         self.add_layer("main", "feature")
+        return self
 
-    def add_layer(self, key='layer', type='feature', layer=None):
+    def add_layer(self, key='layer', type='feature', use_calibrated=False, layer=None):
         """Add a new key:ImgFeature/ImgMask instance to the self.layers_dict."""
         if key == 'layer':
             key = 'layer_' + str(len(self.layers_dict))
         if layer is not None:
             self.layers_dict[key] = layer
         else:
+            if use_calibrated and self.layers_dict["calibrated"] is not None:
+                img_template = self.layers_dict["calibrated"].img
+            else:
+                img_template = self.img
             if type == 'feature':
                 if self.color_model == "GRAY":
-                    self.layers_dict[key] = ImgFeature2(self.layers_dict.get("calibrated", self.img))
+                    self.layers_dict[key] = ImgFeature2(img_template)
                 else:
-                    self.layers_dict[key] = ImgFeature3(self.layers_dict.get("calibrated", self.img))
+                    self.layers_dict[key] = ImgFeature3(img_template)
             else:
                 if self.color_model == "GRAY":
-                    self.layers_dict[key] = ImgMask2(self.layers_dict.get("calibrated", self.img))
+                    self.layers_dict[key] = ImgMask2(img_template)
                 else:
-                    self.layers_dict[key] = ImgMask3(self.layers_dict.get("calibrated", self.img))
+                    self.layers_dict[key] = ImgMask3(img_template)
 
-    def get_chessboard_calibrators(self, chessboard_img, num_x, num_y=(2, 2)):
+    def get_chessboard_calibrators(self, chessboard_imgs_list, num_x=2, num_y=2, show_key=False):
         """
         Get calibrators using a chessboard image and the specified number of corners.
         By inputting an image, which is laid on the surface on which the features are,
         and shot by the original camera lens, this function would calculate out the parameters
         for both image undistortion and perspective transformation.
-        :param chessboard_img: A chess board image
+        :param chessboard_imgs_list: A list of chess board images
         :param corners_number: The number of corners on chessboard in x and y directions
         """
         obj_points = []
         img_points = []
-        objp = np.zeros((num_x * num_y, 3), np.float32)
-        objp[:, :2] = np.mgrid[0:num_x, 0:num_y].T.reshape(-1, 2)
-        chessboard_img_gray = cv2.cvtColor(chessboard_img, cv2.COLOR_BGR2GRAY)
-        ret, corners = cv2.findChessboardCorners(chessboard_img_gray, (num_x, num_y))
-        if ret:
-            obj_points.append(objp)
-            img_points.append(corners)
-            ret, mtx, dist, _, _ = cv2.calibrateCamera(obj_points, img_points,
-                                                       chessboard_img_gray.shape[::-1], None, None)
-            self.calibrators["number_of_img"] += 1
-            n = self.calibrators["number_of_img"]
-            self.calibrators["CamMtx"] = (self.calibrators["CamMtx"] * (n - 1) + mtx) / n
-            self.calibrators["DistCoe"] = (self.calibrators["DistCoe"] * (n - 1) + dist) / n
-            chessboard_undistorted_gray = cv2.undistort(chessboard_img_gray, self.calibrators["CamMtx"],
-                                                        self.calibrators["DistCoe"])
-            _, points = cv2.findChessboardCorners(chessboard_undistorted_gray, (num_x, num_y))
-            src_left_up = points[0][0]
-            src_right_up = points[num_x - 1][0]
-            src_left_low = points[num_x * (num_y - 1)][0]
-            src_right_low = points[num_x * num_y - 1][0]
-            dst_left_up = [100, 100]
-            dst_left_low = [100, chessboard_undistorted_gray.shape[0] - 100]
-            dst_right_up = [chessboard_undistorted_gray.shape[1] - 100, 100]
-            dst_right_low = [chessboard_undistorted_gray.shape[1] - 100, chessboard_undistorted_gray.shape[0] - 100]
-            src = np.array([src_left_up, src_right_up, src_left_low, src_right_low], dtype=np.float32)
-            dst = np.array([dst_left_up, dst_right_up, dst_left_low, dst_right_low], dtype=np.float32)
-            self.calibrators["WarpMtx"] = cv2.getPerspectiveTransform(src, dst)
+        number_of_imgs = 0
+
+        objp = np.zeros((1, num_x * num_y, 3), np.float32)
+        objp[0, :, :2] = np.mgrid[0:num_x, 0:num_y].T.reshape(-1, 2)
+
+        for chessboard_img in chessboard_imgs_list:
+            chessboard_img_gray = cv2.cvtColor(chessboard_img, cv2.COLOR_BGR2GRAY)
+            ret, corners = cv2.findChessboardCorners(chessboard_img_gray, (num_x, num_y), cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE)
+            if ret:
+                number_of_imgs += 1
+                obj_points.append(objp)
+                corners2 = cv2.cornerSubPix(chessboard_img_gray, corners, (11, 11), (-1, -1), (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001))
+                img_points.append(corners2)
         else:
-            print("Unable to detect corners, please try again!")
+            print("Unable to detect corners for this image!")
+
+        ret, mtx, dist, _, _ = cv2.calibrateCamera(obj_points, img_points,
+                                                       chessboard_img_gray.shape[::-1], None, None)
+        self.calibrators["number_of_img"] = number_of_imgs
+        self.calibrators["CamMtx"] = mtx
+        self.calibrators["DistCoe"] = dist
+
+        i = 0
+        for chessboard_img in chessboard_imgs_list[::5]:
+            i+=1
+            chessboard_img_gray = cv2.cvtColor(chessboard_img, cv2.COLOR_BGR2GRAY)
+            chessboard_undistorted_gray = cv2.undistort(chessboard_img_gray, mtx, dist)
+            # helper.image_save(chessboard_img, "chessboard"+str(i))
+            # helper.image_save(chessboard_undistorted_gray, "chessboard_undistorted"+str(i))
+            if show_key:
+                helper.image_show(chessboard_undistorted_gray)
+
+
+    def get_warp_params(self, src_vertices):
+        """
+        Get the warp matrix with a source vertice.
+        :param src_vertices:
+        :return:
+        """
+        y_m, x_m, _ = self.img.shape
+        margin = 10
+        dst = np.array([[margin, y_m - margin], [x_m - margin, y_m - margin], [x_m - margin, margin], [margin, margin]],
+                       dtype=np.float32)
+        warp_mtx = cv2.getPerspectiveTransform(src_vertices, dst)
+        self.calibrators["WarpMtx"] = warp_mtx
 
     def undistort(self, key="img"):
         """
         Undistort the image using the provided parameters.
-        :param camMtx: the camera Matrix
-        :param distCoe: the distortion coefficient
+        If key == "img", the undistorted will be stored under the key "calibrated",
+        else, only the img_processed will be undistorted.
         """
-        if self.calibrators["number_of_images"] == 0:
+        if self.calibrators["number_of_img"] == 0:
             print("Please calibrate with a chessboard image first. Undistortion will not be conducted. ")
             return self
         if key.lower()=="img":
+            img_undistorted = cv2.undistort(self.img, self.calibrators["CamMtx"], self.calibrators["DistCoe"])
             try:
-                img_undistorted = cv2.undistort(self.layers_dict["calibrated"].img, self.calibrators["CamMtx"], self.calibrators["DistCoe"])
                 self.layers_dict["calibrated"].img = img_undistorted
             except:
-                img_undistorted = cv2.undistort(self.img, self.calibrators["CamMtx"], self.calibrators["DistCoe"])
                 self.layers_dict["calibrated"] = ImgFeature3(img_undistorted)
         else:
             img_undistorted = cv2.undistort(self.img_processed, self.calibrators["CamMtx"], self.calibrators["DistCoe"])
         self.img_processed = img_undistorted
         return self
 
+
     def warp(self, key="img", reverse=False):
         """
         Warp the image using a perspective transformation matrix.
+        If key == "img", the unwarped will be stored under the key "calibrated",
+        else, unwarp the designated key.
         :param key: the content to be warped
         """
-        if self.calibrators["number_of_img"] == 0:
-            print("Please calibrate with a chessboard image first. Warp will not be conducted. ")
-            return self
         WarpMtx = self.calibrators["WarpMtx"]
         if reverse:
             WarpMtx = np.linalg.inv(WarpMtx)
@@ -452,17 +486,18 @@ class FeatureCollector:
                 print("Invalid Keys in warpping! Return warpping of original image instead")
                 img_warped = cv2.warpPerspective(self.img, WarpMtx, self.img.shape[1::-1])
         self.img_processed = img_warped
+        # self.image_save("image_warped")
         return self
 
     def image_show(self, show_key=True):
         if show_key:
             helper.image_show(self.img_processed)
 
-    def image_save(self, name="image",suffix=".jpg", path="./"):
+    def image_save(self, name="image", suffix=".jpg", path="./"):
         img_name = helper.image_save(self.img_processed, name, suffix, path)
         print("image saved as", img_name)
 
-    def combine(self, key1, key2, method='and', parameter=(0.5, 1, 0)):
+    def combine(self, key1, key2, method='and', parameter=(1, 0.5, 0)):
         """
         Return the Combination of 2 features in the self.layers_dict according to the method.
         :param key1, key2: The keys of canvases to be combined.
@@ -485,6 +520,44 @@ class FeatureCollector:
         elif method == 'mix':
             self.img_processed = helper.weighted_img(layer1.canvas, layer2.canvas, parameter[0], parameter[1],
                                                      parameter[2])
+            self.layers_dict[key1].canvas = self.img_processed
         else:
             print("Doesn't support such method, sorry.")
             return
+
+class LaneFeatureCollector(FeatureCollector):
+    """
+    This class adds some attributes for storing lane coefficients.
+    """
+    def __init__(self, img, color_model='BGR', calibrators=(0, 0, 0, np.eye(3)), params_cache_size=10):
+        FeatureCollector.__init__(self, img, color_model, calibrators)
+        self.lane_params_list = np.array([])
+        self.lane_params_current = np.array([])
+        self.inds_number_list = np.array([])
+        self.params_cache_size = params_cache_size
+
+    def lane_params_refresh(self, lane_params, inds_number):
+        """
+        Organizes the lane_params_list
+        :param lane_params: np.array[][2][], the incoming polynomial coefficients
+        :param inds_number: np.array[2], the incoming polynomial coefficients
+        """
+        # Step1: Refresh the lane parameters list
+        inds_number = np.array([[[inds_number[0]], [inds_number[1]]]])
+        if len(self.lane_params_list) <=0 :
+            self.lane_params_list = lane_params
+            self.inds_number_list = inds_number
+        else:
+            self.lane_params_list = np.concatenate((self.lane_params_list, lane_params))
+            self.inds_number_list = np.concatenate((self.inds_number_list, inds_number))
+        if len(self.lane_params_list) >= self.params_cache_size:
+            self.lane_params_list = self.lane_params_list[1:]
+            self.inds_number_list = self.inds_number_list[1:]
+
+        # Step2: Calculate the current lane parameters
+        lane_params_weighted = self.lane_params_list * self.inds_number_list
+        self.lane_params_current = lane_params_weighted.sum(axis=0) / self.inds_number_list.sum(axis=0)
+        self.lane_params_list[-1] = self.lane_params_current
+        self.inds_number_list[-1] = self.inds_number_list.mean(axis=0)
+
+        return self

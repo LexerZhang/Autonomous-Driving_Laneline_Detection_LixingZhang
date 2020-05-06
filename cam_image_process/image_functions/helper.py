@@ -25,7 +25,7 @@ def image_save(img, name="image", suffix=".jpg", path="./"):
     return name+suffix
 
 
-def weighted_img(img, initial_img, alpha=0.8, beta=1., gamma=0.):
+def weighted_img(initial_img, img, alpha=0.8, beta=1., gamma=0.):
     """
     `img` is the output of the hough_lines(), An image with lines drawn on it.
     Should be a blank image (all black) with lines drawn on it.
@@ -95,7 +95,10 @@ def image_normalization(img, abs=True):
         img = np.abs(np.int16(img))
     val_max = img.max()
     val_min = img.min()
-    return np.uint8((img - val_min) * 255 / (val_max - val_min))
+    if val_min==val_max:
+        return img
+    else:
+        return np.uint8((img - val_min) * 255 / (val_max - val_min))
 
 
 def get_vertices(img_BGR):
@@ -111,10 +114,10 @@ def get_vertices(img_BGR):
     """
     y_max, x_max, _ = img_BGR.shape
     # Assign cordinates for the 4 corners
-    Point_Lower_Left = (round(0.08 * x_max), y_max - 1)
+    Point_Lower_Left = (round(0.01 * x_max), y_max - 1)
     Point_Lower_Right = (round(0.99 * x_max), y_max - 1)
-    Point_Upper_Left = (round(0.43 * x_max), round(0.65 * y_max))
-    Point_Upper_Right = (round(0.60 * x_max), round(0.65 * y_max))
+    Point_Upper_Left = (round(0.415 * x_max), round(0.65 * y_max))
+    Point_Upper_Right = (round(0.583 * x_max), round(0.65 * y_max))
     Point_list = [Point_Lower_Left, Point_Lower_Right,
                   Point_Upper_Right, Point_Upper_Left]
     line = []
