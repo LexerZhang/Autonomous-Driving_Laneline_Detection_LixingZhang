@@ -3,11 +3,11 @@
 This project is principally a collection of all kinds of self-driving tools I encounter during study and working. It follows a structure as following:
 
     Main_Directory
-    |_ cam_image_process //The module doing all kinds of road image processing
-    |_ test_images
-    |_ test_videos
+    |_ examples # Containng examples using different packages
+    |_ Lane_Detection # The package for lane detection
+    |_ Traffic_Sign_Detection
+    
 ## 2. Module Description
-For the time being(2020/4/17), there are altogether 1 module:
- - Module 1: cam_image_process
-   - Builds a image processing pipeline in python
-   - Function including: **lane detection**
+For the time being(2020/11/12), there are altogether 2 modules:
+ - Module 1: Lane_Detection (python)
+ - Module 2: Traffic_Sign_Detection (python)
